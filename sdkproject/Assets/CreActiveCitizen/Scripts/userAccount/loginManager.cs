@@ -76,18 +76,12 @@ public class loginManager : MonoBehaviour
         userName = Instance.userNameField.text.Trim().ToLower();
         password = Instance.passwordField.text;
         Text wrongLoginInfo = GameObject.Find("Canvas/ErrorPanel").GetComponent<Text>();
-        Debug.Log("userName=" + userName);
-        Debug.Log("password=" + password);
         if (userName == "" || password == "")
         {
             wrongLoginInfo.text= "Sowohl Benutzername als auch Passwort sollten ausgefüllt werden";
         }
         else
         {
-            Debug.Log("userNameAfter=" + userName);
-            Debug.Log("passwordAfter=" + password);
-            Debug.Log("Active? "+gameObject.activeInHierarchy);
-            //Debug.Break();
             StartCoroutine(Instance.DB.CheckLoginData(Instance.userName, Instance.password, (returnedMessage) => {
                 if (returnedMessage) {
                     //Debug.Log("login message: "+DB.userID);
@@ -124,7 +118,6 @@ public class loginManager : MonoBehaviour
                     }
                     else
                     {
-                        Debug.Log(DB.forgetMessage);
                         wrongLoginInfo.text = "Etwas schief ist gelaufen";
                     }
                 }
@@ -168,7 +161,6 @@ public class loginManager : MonoBehaviour
         string userName = userNameField.text.Trim().ToLower();
         string password = passwordField.text;
         string repeatPassword = repeatPasswordField.text;
-        Debug.Log("I am in Register");
         Text wrongLoginInfo = GameObject.Find("Canvas/ErrorPanel").GetComponent<Text>();
         if (userName == "" || password == "")
         {

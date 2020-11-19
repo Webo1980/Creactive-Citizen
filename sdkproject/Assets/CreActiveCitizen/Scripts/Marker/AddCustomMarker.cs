@@ -1,5 +1,6 @@
-namespace Mapbox.Examples
+﻿namespace Mapbox.Examples
 {
+    using UnityEngine;
     using UnityEngine;
     using Mapbox.Utils;
     using Mapbox.Unity.Map;
@@ -20,76 +21,79 @@ namespace Mapbox.Examples
     public class AddCustomMarker : MonoBehaviour
     {
         [Geocode]
-        Vector2d _location;
+        Vector2d _location;  // to save the current location
 
         [SerializeField]
-        AbstractMap _map;
+        AbstractMap _map;    // the used map
 
         [SerializeField]
-        float _spawnScale = 1f;
+        float _spawnScale = 1f;  // at what size should the marker spawned on the screen
 
-        //[SerializeField]
-        GameObject _markerPrefab;
+        
+        List<GameObject> _spawnedObjects;   // list of markers to be loaded on the application start
 
-        List<GameObject> _spawnedObjects;
+        private readonly DBManager DB = new DBManager();  // instance of the DB class
 
-        private readonly DBManager DB = new DBManager();
+        private readonly MarkersMenu markersMenu = new MarkersMenu();  // Instance of the menu class
 
-        private readonly MarkersMenu markersMenu = new MarkersMenu();
+        public Vector2d initialStartLocation;   // a variable to store the current user location, once the app is started
 
-        public Vector2d initialStartLocation;
+        public int loggedUserID;  // global variable saves the current logged user ID
 
-        private int loggedUserID;
+        private GameObject MarkerInstance;  // to save the spawned marker data
 
-        private GameObject MarkerInstance;
+        private GameObject CloseMarkerInstance;  // to save the marker close icon 
 
-        JObject selectedMarkerData;
+        JObject selectedMarkerData;  // save the currrent marker from the menu data
 
-        private IEnumerator GetStartLocation(System.Action<bool> callback)
+        public AudioSource audioSource;  //audio source
+
+        private IEnumerator GetStartLocation(System.Action<bool> callback)  // get the current user location once the GPS scene is loaded
         {
             yield return new WaitForSeconds(1);  // wait until the camera is loaded
-            Vector3 worldPos = Camera.main.ScreenToWorldPoint(new Vector3((float)Screen.width / 2f, (float)Screen.height / 2f, 1.0f));
-            initialStartLocation = _map.WorldToGeoPosition(worldPos);
+            Vector3 worldPos = Camera.main.ScreenToWorldPoint(new Vector3((float)Screen.width / 2f, (float)Screen.height / 2f, 1.0f)); // get the current location of screen center related to the real world
+            initialStartLocation = _map.WorldToGeoPosition(worldPos); // assign the current GEO position to variable
             callback(true);
         }
 
-        void SpawnMarkersOnStart(Vector2d initialLocation)
+        void SpawnMarkersOnStart(Vector2d initialLocation) // use the start location to search the database
         {
+            // Search the database using the start location
             StartCoroutine(DB.GetCoordinates(initialLocation.ToString(), (returnedCoordinatesList) => {
                 if (returnedCoordinatesList)
                 {
-                    var DBCoordinatesList = JToken.Parse(DB.coordinatesList);
+                    var DBCoordinatesList = JToken.Parse(DB.coordinatesList); // save the JSON data in a list
                     _spawnedObjects = new List<GameObject>();
-                    Debug.Log("Coord List:"+DBCoordinatesList);
-                    foreach (var item in DBCoordinatesList)
+                    foreach (var item in DBCoordinatesList) // loop through the list
                     {
-                        double latitude = item["latitude"].ToObject<double>();
-                        double longitude = item["longitude"].ToObject<double>();
+                        if (loggedUserID == item["userID"].ToObject<int>()) // show the close icon only for th users' markers
+                        {
+                           CloseMarkerInstance = GameObject.Find("CloseMarker");  // search the closeMarker in the scene
+                           CloseMarkerInstance.GetComponent<MeshRenderer>().enabled = true;  // show the close icon
+                        }
+                        double latitude = item["latitude"].ToObject<double>();  // assign the latitude to a variable 
+                        double longitude = item["longitude"].ToObject<double>();  // assign the longitude to a variable
                         _location = new Vector2d(latitude, longitude);
-                        Debug.Log("location:" + item);
+                        // search the resources folder for the selected marker to spawn it.
                         GameObject instance = Instantiate(Resources.Load(item["objectName"].ToObject<string>(), typeof(GameObject))) as GameObject;
-                        //var instance = Instantiate(_markerPrefab);
-                        //ChangeMarkerText(instance, item["userID"].ToObject<int>());
+                        //ChangeMarkerText(instance, item["userID"].ToObject<int>()); 
+                        // add the marker to the AR world
                         instance.transform.localPosition = _map.GeoToWorldPosition(_location, true);
-
-                        /*Vector3 localPos = instance.transform.localPosition;
-                        localPos.y = item["positionY"].ToObject<float>();
-                        instance.transform.localPosition = localPos;*/
+                        // get the last known position for the marker and add it
                         instance.transform.localPosition = new Vector3(item["positionX"].ToObject<float>(), item["positionY"].ToObject<float>(), item["positionZ"].ToObject<float>());
-                        //instance.transform.localPosition = new Vector3(item["positionX"].ToObject<float>(), item["positionY"].ToObject<float>(), item["positionZ"].ToObject<float>());
-                        //instance.transform.TransformPoint (transform.localPosition.x, item["positionY"].ToObject<float>(), transform.localPosition.z);
+                        // get the last known rotation for the marker and add it
                         instance.transform.rotation = Quaternion.Euler(item["rotationX"].ToObject<float>(), item["rotationY"].ToObject<float>(), item["rotationZ"].ToObject<float>());
+                        // get the last known scale for the marker and add it
                         instance.transform.localScale = new Vector3(item["scale"].ToObject<float>(), item["scale"].ToObject<float>(), item["scale"].ToObject<float>());
-                        //instance.transform.localScale = new Vector3(_spawnScale, _spawnScale, _spawnScale);
+                        // add the markers objects to the final list
                         _spawnedObjects.Add(instance);
                     }
                 }
             }));
         }
 
-        void InitializeMarkersOnStart()
+        void InitializeMarkersOnStart()  // start intitializing the markers list when ready on start
         {
-            Debug.Log("InitializeMarkersOnStart was called");
             StartCoroutine(GetStartLocation((returnedInitialLocation) => {
                 if (returnedInitialLocation)
                 {
@@ -99,16 +103,17 @@ namespace Mapbox.Examples
 
         }
 
-        public JObject GetMarkerInfo()
+        public JObject GetMarkerInfo()  // get the selected marker data
         {
             JToken objectsList = MarkersMenu.Instance.dropdownObjects;
+            // search the marker object (in english) using the german name 
             List<JToken> markersData = objectsList.Where(t => (string)t["german_name"] == MarkersMenu.Instance.m_option).ToList();
             string selectedMarkerObject = System.String.Join("\n", markersData.Select(v => v.ToString(Formatting.None)));
             JObject selectedMarkerData = JObject.Parse(selectedMarkerObject);
             return selectedMarkerData;
         }
 
-        void ChangeMarkerText(GameObject obj, int userID)
+        void ChangeMarkerText(GameObject obj, int userID) // add a text to the markers. It is commented now in funtion SpawnMarkersOnStart, as the text UI should be enhanced
         {
             TextMesh textObject = (TextMesh)obj.GetComponentInChildren(typeof(TextMesh));
             if (loggedUserID == userID)
@@ -121,7 +126,8 @@ namespace Mapbox.Examples
             }
         }
 
-        void ChangeVisibility(string ObjectName, float Alpha, bool BlocksRaycasts, bool Interactable)
+        // this function is used to show/ hide (text, objects, icons), that has componant Canvas Group
+        public void ChangeVisibility(string ObjectName, float Alpha, bool BlocksRaycasts, bool Interactable)
         {
             CanvasGroup ItemCanvas;
             GameObject Item = GameObject.Find(ObjectName);
@@ -131,6 +137,7 @@ namespace Mapbox.Examples
             ItemCanvas.interactable = Interactable;
         }
 
+        // to know whether the object is shown/ hidden
         float GetObjectVisibility(string ObjectName)
         {
             CanvasGroup ItemCanvas;
@@ -139,13 +146,27 @@ namespace Mapbox.Examples
             return ItemCanvas.alpha;
         }
 
+        // used to change the text message
         void ChangeUIText(string ObjectName, string message)
         {
             Text messageText = GameObject.Find("Canvas/"+ ObjectName).GetComponent<Text>();
             messageText.text = message;
         }
 
-        void AddMarker(Vector3 touchData)
+        // this function is using an asset called Lean Touch to move the obejct
+        void MoveMarker(GameObject obj)
+        {
+            obj.AddComponent<LeanTouch>();
+            var Scale = obj.AddComponent<LeanPinchScale>();
+            Scale.Sensitivity = 1f;
+            Scale.Dampening = -1;
+            var Twist = obj.AddComponent<LeanTwistRotateAxis>();
+            Space World = default;
+            Twist.Space = World;
+            var Move = obj.AddComponent<LeanDragTranslate>();
+        }
+        
+        void AddMarker(Vector3 touchData) // all the magic happens here
         {
             Ray ray = Camera.main.ScreenPointToRay(touchData); // Construct a ray from the current touch coordinates
             Plane plane = new Plane(Vector3.up, transform.position);
@@ -157,35 +178,25 @@ namespace Mapbox.Examples
                 selectedMarkerData = GetMarkerInfo();
                 MarkerInstance = Instantiate(Resources.Load(selectedMarkerData["name"].ToObject<string>(), typeof(GameObject))) as GameObject;
 
-                MarkerInstance.AddComponent<LeanTouch>();
-                var Scale = MarkerInstance.AddComponent<LeanPinchScale>();
-                Scale.Sensitivity = 1f;
-                Scale.Dampening = -1;
-                var Twist = MarkerInstance.AddComponent<LeanTwistRotateAxis>();
-                Space World = default;
-                Twist.Space = World;
-
-                var MoveY = MarkerInstance.AddComponent<MoveYAxis>();
-                MoveY.speed = 0.95f;
+                MoveMarker(MarkerInstance);
                 
-                //Destroy(instance.GetComponent<RotateObject>());
-                //ChangeMarkerText(MarkerInstance, loggedUserID);
-                //var instance = Instantiate(_markerPrefab);
-                //PlaneInstance.transform.localPosition = _map.GeoToWorldPosition(_location, true);
-                //PlaneInstance.transform.localScale = new Vector3(_spawnScale, _spawnScale, _spawnScale);
-
                 MarkerInstance.transform.localPosition = _map.GeoToWorldPosition(_location, true);
+                
+                //ChangeMarkerText(MarkerInstance, loggedUserID);
+
                 MarkerInstance.transform.localScale = new Vector3(_spawnScale, _spawnScale, _spawnScale);
+                PlayClip(audioSource, "SetMarker");
                 ChangeVisibility("Cancle", 1f, true, true);
                 ChangeVisibility("Apply", 1f, true, true);
                 ChangeVisibility("StartMessage", 1.0f, true, true);
-                ChangeUIText("StartMessage", "Sie k�nnen das Objekt drehen, skalieren und vertikal verschieben");
+                ChangeUIText("StartMessage", "Sie können das Objekt drehen, skalieren und vertikal verschieben");
                 //StartCoroutine(DB.PostCoordinates(_location.ToString(), selectedMarkerData["id"].ToObject<string>(), loggedUserID));
                 //_spawnedObjects.Add(instance);
                 //Debug.Log(selectedMarkerData["name"] + " Change Menu:" + markersMenu.isChanged);
                 //selectedMarkerData["name"] = "";
             }
         }
+
 
         public void SaveMarkerInfo()
         {
@@ -203,17 +214,34 @@ namespace Mapbox.Examples
                            , position.y, position.z,rotationX,rotationY,rotationZ, scale.x, _location.ToString()));
             ChangeVisibility("Apply", 0f, false, false);
             ChangeVisibility("Cancle", 0f, false, false);
+            selectedMarkerData = GetMarkerInfo();
+            CloseMarkerInstance = GameObject.Find("CloseMarker"+ selectedMarkerData["name"].ToObject<string>());
+            CloseMarkerInstance.GetComponent<MeshRenderer>().enabled = true;
             Destroy(MarkerInstance.GetComponent<LeanTouch>());
             Destroy(MarkerInstance.GetComponent<LeanTwistRotateAxis>());
-            Destroy(MarkerInstance.GetComponent<LeanPinchScale>()); 
-            Destroy(MarkerInstance.GetComponent<MoveYAxis>());
+            Destroy(MarkerInstance.GetComponent<LeanPinchScale>());
+            Destroy(MarkerInstance.GetComponent<LeanDragTranslate>());
+            PlayClip(audioSource, "SaveMarker");
         }
 
-        public void DeleteMarker()
+        public void CancelAddingMarker()
         {
             Destroy(MarkerInstance);
             ChangeVisibility("Apply", 0f, false, false);
             ChangeVisibility("Cancle", 0f, false, false);
+            PlayClip(audioSource,"DeleteMarker");
+        }
+
+        public void PlayClip(AudioSource audioSource,string audioClipName)
+        {
+            AudioClip PlayedClip = (AudioClip)Resources.Load("Sounds/" + audioClipName);
+            if (PlayedClip != null)
+            {
+                Debug.Log("Sounds/" + audioClipName);
+                Debug.Log("Sourcs=" + audioSource);
+                audioSource.clip = PlayedClip;
+                audioSource.Play();
+            }
         }
 
         void Start()
@@ -226,21 +254,17 @@ namespace Mapbox.Examples
         void Update()
         {
             _map.UseWorldScale();  // tell the app, hi we are in AR envionment
-            //print("Current userID=" + loginManager.Instance.currentUserID);
             if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
             {
                 ChangeVisibility("StartMessage", 0.0f, false, false);
+                ChangeVisibility("Screenshot", 1f, true, true);
+                ChangeVisibility("ScreenShare", 1f, true, true);
                 MarkersMenu.Instance.ShowMenu();
                 Vector3 touchData = Input.GetTouch(0).position;
                 if (GetObjectVisibility("Apply") <= 0)
                 {
                     AddMarker(touchData);
                 }
-                
-                //if (touchData.y > 125)
-                //{ // the markers only should be added, if the user hits above the map line
-
-                //}
             }
             
         }
