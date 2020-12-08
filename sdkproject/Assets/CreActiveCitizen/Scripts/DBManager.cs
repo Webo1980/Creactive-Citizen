@@ -14,17 +14,18 @@ public class DBManager : MonoBehaviour
     #else
             private readonly string sendDataURL = "http://localhost/unity_test/";
     #endif*/
-    private readonly string sendDataURL = "https://creative-citizen.wineme.wiwi.uni-siegen.de/";
+    private static readonly string sendDataURL = "https://creative-citizen.wineme.wiwi.uni-siegen.de/";
     public string coordinatesList;
-    public string objectsList;
+    public static string objectsList;
     public string userID;
     public string forgetMessage;
     public string changeMessage;
     public string registerMessage;
     public string verifyMessage;
+    public static bool isDrawing = false;
 
     // remember to use StartCoroutine when calling this function!
-    public IEnumerator PostCoordinates(int objectID, int userID, float positionX, float positionY, float positionZ
+    public static IEnumerator PostCoordinates(int objectID, int userID, float positionX, float positionY, float positionZ
                                        , float rotationX, float rotationY, float rotationZ, float scale, string coordinatesData)
     {
         List<IMultipartFormSection> wwwform = new List<IMultipartFormSection>
@@ -70,7 +71,7 @@ public class DBManager : MonoBehaviour
 		}
 	}
 
-    public IEnumerator GetObjectsLists(System.Action<bool> callback)
+    public static IEnumerator GetObjectsLists(System.Action<bool> callback)
     {
         List<IMultipartFormSection> wwwform = new List<IMultipartFormSection>
         {

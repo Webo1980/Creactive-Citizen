@@ -13,8 +13,8 @@ public class TakeScreenshot : MonoBehaviour {
 
     public void TakeAShot()
 	{
-		StartCoroutine ("CaptureIt");
-        Marker.PlayClip(audioSource, "Screenshot");
+        StartCoroutine ("CaptureIt");
+        AddCustomMarker.PlayClip(audioSource, "Screenshot");
         StartCoroutine("ShowMessage");
     }
 
@@ -36,9 +36,9 @@ public class TakeScreenshot : MonoBehaviour {
 
     IEnumerator ShowMessage()
     {
-        Marker.ChangeVisibility("ScreenShotMessage", 1.0f, true, true);
+        AddCustomMarker.ChangeVisibility("ScreenShotMessage", 1.0f, true, true);
         yield return new WaitForSeconds(3);
-        Marker.ChangeVisibility("ScreenShotMessage", 0.0f, false, false);
+        AddCustomMarker.ChangeVisibility("ScreenShotMessage", 0.0f, false, false);
     }
 
 }

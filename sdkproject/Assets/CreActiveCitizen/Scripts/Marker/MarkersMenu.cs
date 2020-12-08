@@ -1,3 +1,4 @@
+using Mapbox.Examples;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -6,18 +7,15 @@ using Mapbox.Json.Linq;
 
 public class MarkersMenu : MonoBehaviour
 {
-    Dropdown m_Dropdown;
+    public static Dropdown m_Dropdown;
     public int m_DropdownValue;
     public string m_option;
     public JToken dropdownObjects;
     [SerializeField]
     string DefaultOption;
 
-    CanvasGroup DrowpCanvas;
-
     public static MarkersMenu Instance { get; private set; }
-    private readonly DBManager DB = new DBManager();
-
+    
     void PopulateDropdown(Dropdown dropdown, JToken optionsArray)
     {
         List<string> options = new List<string>();
@@ -44,25 +42,19 @@ public class MarkersMenu : MonoBehaviour
         }
     }
 
-    public void ShowMenu()
-    {
-        DrowpCanvas = m_Dropdown.GetComponent<CanvasGroup>();
-        DrowpCanvas.alpha = 1f;
-        DrowpCanvas.blocksRaycasts = true;
-        DrowpCanvas.interactable = true;
-    }
-
     void Start()
     {
         //Fetch the DropDown component from the GameObject
         m_Dropdown = GetComponent<Dropdown>();
-        StartCoroutine(DB.GetObjectsLists((returnedObjectsList) => {
+        IEnumerator cuurentObjectsList = DBManager.GetObjectsLists((returnedObjectsList) => {
             if (returnedObjectsList)
             {
-                dropdownObjects = JToken.Parse(DB.objectsList);
+                string DBObjectsList = DBManager.objectsList;
+                dropdownObjects = JToken.Parse(DBObjectsList);
                 PopulateDropdown(m_Dropdown, dropdownObjects);
             }
-        }));
+        });
+        StartCoroutine(cuurentObjectsList);
     }
 
     void Update()
@@ -71,24 +63,23 @@ public class MarkersMenu : MonoBehaviour
         { 
            m_option = m_Dropdown.options[m_Dropdown.value].text;
         }
+
+        if (DrawOnScreen.isDrawing == true)
+        {
+            m_Dropdown.value = 0;
+        }
+        
     }
 
-    /*void DropdownValueChanged()
+    public void IsDropdownValueChanged()
     {
-        isChanged = true;
-        Debug.Log("The onchange was called");
+        if(m_Dropdown.value != 0)  // if the user selected a marker
+        {
+            DrawOnScreen.isDrawing = false;  // stop painting
+            // hide drawing colors
+            AddCustomMarker.ChangeVisibility("SetRed", 0.0f, false, false);
+            AddCustomMarker.ChangeVisibility("SetGreen", 0.0f, false, false);
+            AddCustomMarker.ChangeVisibility("SetBlue", 0.0f, false, false);
+        }
     }
-
-    /*public int CurrentMenuIndex()
-    {
-        m_DropdownValue = m_Dropdown.value;
-        return m_DropdownValue;
-    }
-
-    public string CurrentMenuText()
-    {
-        //m_DropdownValue = m_Dropdown.value;
-        m_option = m_Dropdown.options[4].text;
-        return m_option;
-    }*/
 }

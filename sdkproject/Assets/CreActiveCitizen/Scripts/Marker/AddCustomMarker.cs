@@ -32,13 +32,16 @@
         
         List<GameObject> _spawnedObjects;   // list of markers to be loaded on the application start
 
-        private readonly DBManager DB = new DBManager();  // instance of the DB class
+        public DBManager DB = new DBManager();  // instance of the DB class
+
 
         private readonly MarkersMenu markersMenu = new MarkersMenu();  // Instance of the menu class
 
         public Vector2d initialStartLocation;   // a variable to store the current user location, once the app is started
 
         public int loggedUserID;  // global variable saves the current logged user ID
+
+        public Plane MarkerPlane;
 
         private GameObject MarkerInstance;  // to save the spawned marker data
 
@@ -127,7 +130,7 @@
         }
 
         // this function is used to show/ hide (text, objects, icons), that has componant Canvas Group
-        public void ChangeVisibility(string ObjectName, float Alpha, bool BlocksRaycasts, bool Interactable)
+        public static void ChangeVisibility(string ObjectName, float Alpha, bool BlocksRaycasts, bool Interactable)
         {
             CanvasGroup ItemCanvas;
             GameObject Item = GameObject.Find(ObjectName);
@@ -166,12 +169,13 @@
             var Move = obj.AddComponent<LeanDragTranslate>();
         }
         
-        void AddMarker(Vector3 touchData) // all the magic happens here
+        bool AddMarker(Vector3 touchData) // all the magic happens here
         {
             Ray ray = Camera.main.ScreenPointToRay(touchData); // Construct a ray from the current touch coordinates
-            Plane plane = new Plane(Vector3.up, transform.position);
+            MarkerPlane = new Plane(Vector3.up, transform.position);
+            bool isMarkerSet = false;
             // this will return the distance from the camera
-            if (plane.Raycast(ray, out float distance))  // if plane hit...
+            if (MarkerPlane.Raycast(ray, out float distance))  // if plane hit...
             {
                 Vector3 position = ray.GetPoint(distance); // get the point
                 _location = _map.WorldToGeoPosition(position);
@@ -188,19 +192,19 @@
                 PlayClip(audioSource, "SetMarker");
                 ChangeVisibility("Cancle", 1f, true, true);
                 ChangeVisibility("Apply", 1f, true, true);
-                ChangeVisibility("StartMessage", 1.0f, true, true);
-                ChangeUIText("StartMessage", "Sie können das Objekt drehen, skalieren und vertikal verschieben");
                 //StartCoroutine(DB.PostCoordinates(_location.ToString(), selectedMarkerData["id"].ToObject<string>(), loggedUserID));
                 //_spawnedObjects.Add(instance);
                 //Debug.Log(selectedMarkerData["name"] + " Change Menu:" + markersMenu.isChanged);
                 //selectedMarkerData["name"] = "";
+                isMarkerSet = true;
             }
+            return isMarkerSet;
         }
 
 
         public void SaveMarkerInfo()
         {
-            //Debug.Log("Trans:"+MarkerInstance.transform.localPosition.ToString("F7"));
+            Debug.Log("Trans:"+MarkerInstance.transform.localPosition.ToString("F7"));
             Vector3 position = MarkerInstance.transform.position;
             float rotationX = (MarkerInstance.transform.eulerAngles.x < 180f) ? MarkerInstance.transform.eulerAngles.x : MarkerInstance.transform.eulerAngles.x - 360;
             float rotationY = (MarkerInstance.transform.eulerAngles.y < 180f) ? MarkerInstance.transform.eulerAngles.y : MarkerInstance.transform.eulerAngles.y - 360;
@@ -210,10 +214,14 @@
             //Debug.Log("Rot:" + MarkerInstance.transform.rotation.eulerAngles.ToString("F7")); // Check the docs about converting
             //Debug.Log("Scale:" + MarkerInstance.transform.localScale.ToString("F7"));
             //Debug.Log("Loc:" + _location);
-            StartCoroutine(DB.PostCoordinates(selectedMarkerData["id"].ToObject<int>(), loggedUserID, position.x
-                           , position.y, position.z,rotationX,rotationY,rotationZ, scale.x, _location.ToString()));
+            IEnumerator PostData = DBManager.PostCoordinates(selectedMarkerData["id"].ToObject<int>(), loggedUserID, position.x
+                           , position.y, position.z, rotationX, rotationY, rotationZ, scale.x, _location.ToString());
+            StartCoroutine(PostData);
+            //StartCoroutine(DBManager.PostCoordinates(selectedMarkerData["id"].ToObject<int>(), loggedUserID, position.x
+              //             , position.y, position.z,rotationX,rotationY,rotationZ, scale.x, _location.ToString()));
             ChangeVisibility("Apply", 0f, false, false);
             ChangeVisibility("Cancle", 0f, false, false);
+            ChangeVisibility("MessageToUser", 0f, false, false); 
             selectedMarkerData = GetMarkerInfo();
             CloseMarkerInstance = GameObject.Find("CloseMarker"+ selectedMarkerData["name"].ToObject<string>());
             CloseMarkerInstance.GetComponent<MeshRenderer>().enabled = true;
@@ -229,16 +237,17 @@
             Destroy(MarkerInstance);
             ChangeVisibility("Apply", 0f, false, false);
             ChangeVisibility("Cancle", 0f, false, false);
+            ChangeVisibility("MessageToUser", 0f, false, false);
             PlayClip(audioSource,"DeleteMarker");
         }
 
-        public void PlayClip(AudioSource audioSource,string audioClipName)
+        public static void PlayClip(AudioSource audioSource,string audioClipName)
         {
             AudioClip PlayedClip = (AudioClip)Resources.Load("Sounds/" + audioClipName);
             if (PlayedClip != null)
             {
-                Debug.Log("Sounds/" + audioClipName);
-                Debug.Log("Sourcs=" + audioSource);
+                //Debug.Log("Sounds/" + audioClipName);
+                //Debug.Log("Sourcs=" + audioSource);
                 audioSource.clip = PlayedClip;
                 audioSource.Play();
             }
@@ -248,25 +257,29 @@
         {
             loggedUserID = System.Int16.Parse(loginManager.Instance.currentUserID);
             InitializeMarkersOnStart();
-            //print("Start is called, and userID="+ loginManager.Instance.currentUserID);
         }
 
         void Update()
         {
             _map.UseWorldScale();  // tell the app, hi we are in AR envionment
-            if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began)
+            if (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began && DrawOnScreen.isDrawing == false)
             {
-                ChangeVisibility("StartMessage", 0.0f, false, false);
-                ChangeVisibility("Screenshot", 1f, true, true);
-                ChangeVisibility("ScreenShare", 1f, true, true);
-                MarkersMenu.Instance.ShowMenu();
+                Debug.Log("Start adding Markers");
                 Vector3 touchData = Input.GetTouch(0).position;
                 if (GetObjectVisibility("Apply") <= 0)
                 {
-                    AddMarker(touchData);
+                    if(AddMarker(touchData)==true)
+                    { 
+                        ChangeVisibility("MessageToUser", 1f, true, true);
+                        ChangeUIText("MessageToUser", "Sie können das Objekt drehen, skalieren und vertikal verschieben");
+                    }
                 }
             }
-            
+
+            if(DrawOnScreen.isDrawing == true)
+            {
+                DrawOnScreen.StartDrawing();
+            }
         }
     }
 }
